@@ -33,8 +33,12 @@ Contents:
    introduction.rst
    sample.rst
    dispatchers.rst
+   pycrash.rst
 
 .. automodule:: pycrash
+    :members:
+
+
 
 
 Indices and tables
