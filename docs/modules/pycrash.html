@@ -1,0 +1,451 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    
+    <title>pycrash &mdash; PyCrash PreAlpha1 documentation</title>
+    
+    <link rel="stylesheet" href="../static/nature.css" type="text/css" />
+    <link rel="stylesheet" href="../static/pygments.css" type="text/css" />
+    
+    <script type="text/javascript">
+      var DOCUMENTATION_OPTIONS = {
+        URL_ROOT:    '../',
+        VERSION:     'PreAlpha1',
+        COLLAPSE_INDEX: false,
+        FILE_SUFFIX: '.html',
+        HAS_SOURCE:  true
+      };
+    </script>
+    <script type="text/javascript" src="../static/jquery.js"></script>
+    <script type="text/javascript" src="../static/underscore.js"></script>
+    <script type="text/javascript" src="../static/doctools.js"></script>
+    <link rel="top" title="PyCrash PreAlpha1 documentation" href="../index.html" />
+    <link rel="up" title="Module code" href="index.html" /> 
+  </head>
+  <body>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../index.html">PyCrash PreAlpha1 documentation</a> &raquo;</li>
+          <li><a href="index.html" accesskey="U">Module code</a> &raquo;</li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body">
+            
+  <h1>Source code for pycrash</h1><div class="highlight"><pre>
+<span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">PyCrash - A Run-Time Exception Dumper for Python Applications. </span>
+
+<span class="sd">PyCrash allows you to eayly add crash reporting facilities to</span>
+<span class="sd">your python applications. It supports the gneraton of crash </span>
+<span class="sd">reports in both XML and HTML.</span>
+
+<span class="sd">&#39;&#39;&#39;</span><span class="c">#</span>
+<span class="c"># (C)Copyright Carmine Ivan Delio Noviello 2003-2004 &lt;cnoviello@pycrash.org&gt;</span>
+<span class="c">#</span>
+<span class="c"># For further informations, please refer to: www.pycrash.org</span>
+<span class="c">#</span>
+<span class="c"># This library is free software; you can redistribute it and/or</span>
+<span class="c"># modify it under the terms of the GNU Lesser General Public</span>
+<span class="c"># License as published by the Free Software Foundation; either</span>
+<span class="c"># version 2 of the License, or (at your option) any later version.</span>
+
+<span class="c"># This library is distributed in the hope that it will be useful,</span>
+<span class="c"># but WITHOUT ANY WARRANTY; without even the implied warranty of</span>
+<span class="c"># MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU</span>
+<span class="c"># Lesser General Public License for more details.</span>
+
+<span class="c"># You should have received a copy of the GNU Lesser General Public</span>
+<span class="c"># License along with this library; if not, write to the</span>
+<span class="c"># Free Software Foundation, Inc., 59 Temple Place - Suite 330,</span>
+<span class="c"># Boston, MA 02111-1307, USA.</span>
+
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">types</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">string</span>
+<span class="kn">import</span> <span class="nn">atexit</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">platform</span>
+
+<span class="kn">from</span> <span class="nn">exctb</span> <span class="kn">import</span> <span class="n">ExceptionTraceBack</span>
+<span class="kn">from</span> <span class="nn">lxml</span> <span class="kn">import</span> <span class="n">etree</span>
+
+<span class="kn">from</span> <span class="nn">version</span> <span class="kn">import</span> <span class="n">PYCRASH_VERSION</span>
+<span class="c">#_DictType = types.DictType</span>
+<span class="c">#_StringType = types.StringType</span>
+<span class="c">#del types</span>
+
+<span class="c">#_exc_info = sys.exc_info</span>
+
+
+<span class="c">#_StringLower = string.lower</span>
+<span class="c">#del string</span>
+
+<span class="c">#_atexit_register = atexit.register</span>
+<span class="c">#_atexit_exithandlers = atexit._exithandlers</span>
+<span class="c">#del atexit</span>
+
+<span class="c">#_time = time.time</span>
+<span class="c">#_localtime = time.localtime</span>
+<span class="c">#del time</span>
+
+<span class="c">#_currentThread = threading.currentThread</span>
+<span class="c">#del threading</span>
+
+<span class="c">#Global variables definition</span>
+<span class="n">PYCRASH_REFERENCE</span>         <span class="o">=</span> <span class="bp">None</span>
+
+<div class="viewcode-block" id="PyCrash"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash">[docs]</a><span class="k">class</span> <span class="nc">PyCrash</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">    This object is a singleon and when enabled will overided utilize</span>
+<span class="sd">    the sys.exceptHook. </span>
+
+<span class="sd">    </span>
+
+<span class="sd">    &#39;&#39;&#39;</span>
+    <span class="n">__initialized</span> <span class="o">=</span> <span class="mi">0</span>  <span class="c">#initialization flag</span>
+    <span class="n">STATUS_ENABLED</span> <span class="o">=</span> <span class="mi">1</span> <span class="c">#PyCrash status flags</span>
+    <span class="n">STATUS_DISABLED</span> <span class="o">=</span> <span class="mi">0</span>
+    
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">options</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        On initilaztion you can specify any number of options in the form of</span>
+<span class="sd">        key=value. Valid options are ...</span>
+
+<span class="sd">        :param:`AppName`: The Name of the Application. This is used for reporting</span>
+<span class="sd">         purposes in the XML/HTML reports.</span>
+
+<span class="sd">        :param:`Version`: The version of the Application. Used for reporting </span>
+<span class="sd">         purposes.</span>
+
+<span class="sd">        :param:`SendTo`: Specifies where the XML crash report will be sent to. If</span>
+<span class="sd">         the value starts with &quot;email:&quot; then the XML crash report will be emailed</span>
+<span class="sd">         to the address. (eg SendTo = &#39;email:owner@application.com&#39;). If the value</span>
+<span class="sd">         starts with &#39;http:&#39;, then the xml crash report will be HTTP POSTed to the</span>
+<span class="sd">         specified address (eg, SendTo = &#39;http://www.pycrash.org/ACR&#39;). Note that</span>
+<span class="sd">         autentication is currently not supported.</span>
+
+<span class="sd">        :param:`time`: Specified when the application started. If not specified the</span>
+<span class="sd">         current time is used.</span>
+
+<span class="sd">        Note that the pycrash object must be a singleton and as such only one such</span>
+<span class="sd">        object will exist per application. On initalization the singleton is sotred</span>
+<span class="sd">        in the gloabl PYCRASH_REFERENCE. If a second pycrash object is intialized</span>
+<span class="sd">        it will return the first one.</span>
+
+<span class="sd">        &#39;&#39;&#39;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_AppName</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;AppName&quot;</span><span class="p">,</span> <span class="s">&quot;Not-Set&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_Version</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;Version&quot;</span><span class="p">,</span> <span class="s">&quot;0&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_SendTo</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;SendTo&quot;</span><span class="p">,</span> <span class="s">&quot;user@localhost&quot;</span><span class="p">)</span>
+
+        <span class="c">#TODO: We should do something intelegent to check what type of time the user</span>
+        <span class="c"># passes in</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_time</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s">&quot;time&quot;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">())</span> <span class="c">#When the application started</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dispatchers</span> <span class="o">=</span> <span class="p">[]</span>
+    
+
+        <span class="k">global</span> <span class="n">PYCRASH_REFERENCE</span>
+            
+        <span class="c">#A PyCrash object must be static (unique for the entiere application).</span>
+        <span class="c">#So we first check that this is the first istance</span>
+        <span class="k">if</span> <span class="n">PYCRASH_REFERENCE</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">PYCRASH_REFERENCE</span>
+        <span class="c">#Then we check that if this object is just initialized</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">:</span>
+            <span class="k">return</span> 
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">__appCrashed</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">STATUS_DISABLED</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__oldHook</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__numberOfExceptions</span> <span class="o">=</span> <span class="mi">0</span> <span class="c">#This is used to count the number of </span>
+                                        <span class="c">#uncaught exceptions raised</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__tbList</span> <span class="o">=</span> <span class="p">[]</span> <span class="c">#List of ExceptionThraceback objects</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__time</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_time</span><span class="p">,</span> <span class="bp">None</span><span class="p">]</span> <span class="c">#[0]=application started, [1]=exception raised</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__customRecords</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span> <span class="o">=</span> <span class="mi">1</span> <span class="c">#The PyCrash object is now intialized</span>
+
+        <span class="c">#We set this variable in order to have an unique PyCrash object</span>
+        <span class="c">#for the application</span>
+        <span class="n">PYCRASH_REFERENCE</span> <span class="o">=</span> <span class="bp">self</span>
+    
+    <span class="k">def</span> <span class="nf">__exceptHook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">tb</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+
+        
+        <span class="k">if</span> <span class="nb">type</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">value</span> <span class="ow">is</span> <span class="bp">None</span> <span class="ow">and</span> <span class="n">tb</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">return</span>
+
+
+        <span class="c">#Ok. Something is wrong and let&#39;s build the crush dump</span>
+        <span class="c">#This method is called each time an exception isn&#39;t caught. So</span>
+        <span class="c">#we must check that this is the first time</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">__appCrashed</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__appCrashed</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">__time</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        
+        <span class="c">#We fetch the reference to current thread to take its name</span>
+        <span class="n">t</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">currentThread</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__mkCrashDump</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="n">getName</span><span class="p">(),</span> <span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">tb</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__numberOfExceptions</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">onExceptionRaised</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__numberOfExceptions</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__exit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span> 
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">onExit</span><span class="p">()</span>    
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">msg</span><span class="p">:</span>
+            <span class="k">print</span> <span class="ne">Exception</span><span class="p">,</span> <span class="n">msg</span>
+
+    <span class="c">#def __getAppInfo(self):</span>
+    <span class="c">#    assert self.__initialized, &quot;PyCrash.__init__() not called&quot;</span>
+    <span class="c">#    </span>
+    <span class="c">#    strInfo = &quot; appname=\&quot;&quot; + self._AppName + &quot;\&quot; appversion=\&quot;&quot; +  self._Version + &quot;\&quot;&quot; </span>
+    <span class="c">#    strInfo += &quot; started=\&quot;&quot; + time.ctime(self.__time[0]) + &quot;\&quot; crashed=\&quot;&quot; + time.ctime(self.__time[1]) + &quot;\&quot;&quot;</span>
+    <span class="c">#    return strInfo</span>
+    <span class="c">#</span>
+    <span class="c">#def __getCustomRecords(self):</span>
+    <span class="c">#    assert self.__initialized, &quot;PyCrash.__init__() not called&quot;</span>
+    <span class="c">#    </span>
+    <span class="c">#    #FIXME: use lxml</span>
+    <span class="c">#    strInfo = &quot;&quot;</span>
+    <span class="c">#    for elem in self.__customRecords:</span>
+    <span class="c">#        strInfo += &quot;\t&lt;customrecord&gt;&quot; + elem + &quot;&lt;/customrecord&gt;\n&quot;</span>
+    <span class="c">#</span>
+    <span class="c">#    return strInfo</span>
+    <span class="c">#</span>
+    <span class="c">#</span>
+    <span class="c">#def __getPythonInfo(self):</span>
+    <span class="c">#    assert self.__initialized, &quot;PyCrash.__init__() not called&quot;</span>
+    <span class="c">#    </span>
+    <span class="c">#    strInfo = &quot; pyversion=\&quot;&quot; + str(sys.version_info) + &quot;\&quot;&quot;</span>
+    <span class="c">#    strInfo += &quot; pyapiversion=\&quot;&quot; + str(sys.api_version) + &quot;\&quot;&quot;</span>
+    <span class="c">#    return strInfo</span>
+    <span class="c">#    </span>
+    <span class="k">def</span> <span class="nf">__mkCrashDump</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">thread</span><span class="p">,</span> <span class="n">excInfo</span><span class="p">):</span>
+        <span class="c">#This is the routine which builds up the crash dump </span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+        
+        <span class="c">#Parsing each exception traceback</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__tbList</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">ExceptionTraceBack</span><span class="p">(</span><span class="n">thread</span><span class="p">,</span> <span class="n">excInfo</span><span class="p">))</span>
+
+        <span class="c">#Lets create an xml crash dump and had it to the disatchers</span>
+
+        <span class="n">xml</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">getCrashDump</span><span class="p">()</span>
+
+        <span class="k">for</span> <span class="n">dispatcher</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dispatchers</span><span class="p">:</span>
+            <span class="n">dispatcher</span><span class="o">.</span><span class="n">dispatch</span><span class="p">(</span><span class="n">xml</span><span class="p">)</span>
+            
+
+<div class="viewcode-block" id="PyCrash.addCustomRecord"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.addCustomRecord">[docs]</a>    <span class="k">def</span> <span class="nf">addCustomRecord</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">record</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        Custom records are optional bits of information that can be included</span>
+<span class="sd">        in the crash report.</span>
+<span class="sd">        &#39;&#39;&#39;</span>       
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__customRecords</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">record</span><span class="p">)</span>
+</div>
+<div class="viewcode-block" id="PyCrash.disable"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.disable">[docs]</a>    <span class="k">def</span> <span class="nf">disable</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Disable PyCrash to trace raised exceptions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__status</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">STATUS_ENABLED</span><span class="p">:</span>
+            <span class="n">sys</span><span class="o">.</span><span class="n">excepthook</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__oldHook</span>
+            <span class="k">for</span> <span class="n">elem</span> <span class="ow">in</span> <span class="n">atexit</span><span class="o">.</span><span class="n">_exithandlers</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">elem</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">__exit</span><span class="p">:</span>
+                    <span class="n">atexit</span><span class="o">.</span><span class="n">_exithandlers</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">elem</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">__status</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">STATUS_DISABLED</span>
+</div>
+<div class="viewcode-block" id="PyCrash.enable"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.enable">[docs]</a>    <span class="k">def</span> <span class="nf">enable</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">            Enable PyCrash to trace raised exceptions</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__status</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">STATUS_DISABLED</span><span class="p">:</span>
+            <span class="c">#PyCrash works well only with Python 2.3 or later. So, before we</span>
+            <span class="c">#set appropriate hooks, we must check that this is the right version: if no,</span>
+            <span class="c">#no hooks are set to avoid abnormal terminations of the program</span>
+            <span class="k">if</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">2</span> <span class="ow">and</span> <span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="mi">3</span><span class="p">:</span>
+                <span class="c">#Hooks need for catch raised exception and application exit</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__oldHook</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">excepthook</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">excepthook</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">__exceptHook</span>
+                <span class="n">atexit</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__exit</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">__status</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">STATUS_ENABLED</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s">&quot;PyCrash can&#39;t work with this version of Python. Please, use Python 2.3 or higher&quot;</span><span class="p">)</span>
+        
+</div>
+<div class="viewcode-block" id="PyCrash.forceDump"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.forceDump">[docs]</a>    <span class="k">def</span> <span class="nf">forceDump</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;forceDump() forces the creation of the crash dump, if an</span>
+<span class="sd">           exception is raised. </span>
+<span class="sd">           forceDump() method can be very useful when an exception hasn&#39;t</span>
+<span class="sd">           reached the top-level, but the user wants the same to make a </span>
+<span class="sd">           dump of the application context&quot;&quot;&quot;</span>
+
+        <span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">tb</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">exc_info</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">__exceptHook</span><span class="p">(</span><span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">tb</span><span class="p">)</span> <span class="c">#We force the creation of crash</span>
+                                           <span class="c">#dump with this call</span>
+    </div>
+    <span class="k">def</span> <span class="nf">getCrashDump</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__appCrashed</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">toXML</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">getFileName</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+        
+        <span class="k">try</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__fileName</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">None</span>
+
+    <span class="k">def</span> <span class="nf">getNumberOfRaisedExceptions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+        
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__numberOfExceptions</span>
+
+<div class="viewcode-block" id="PyCrash.isCrashed"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.isCrashed">[docs]</a>    <span class="k">def</span> <span class="nf">isCrashed</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns 1 (true) if the application has been crashed, </span>
+<span class="sd">            otherwise 0 &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+        
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">__appCrashed</span>
+</div>
+<div class="viewcode-block" id="PyCrash.onBegin"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.onBegin">[docs]</a>    <span class="k">def</span> <span class="nf">onBegin</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; User&#39;s defined actions: derived classes can override this</span>
+<span class="sd">            method to add custom actions. This method is called at the </span>
+<span class="sd">            begin of crash dump construction &quot;&quot;&quot;</span>
+        <span class="k">pass</span> <span class="c">#User-defined actions</span>
+</div>
+<div class="viewcode-block" id="PyCrash.onEnd"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.onEnd">[docs]</a>    <span class="k">def</span> <span class="nf">onEnd</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; User&#39;s defined actions: derived classes can override this</span>
+<span class="sd">            method to add custom actions. This method is called at the end</span>
+<span class="sd">            of crash dump construction &quot;&quot;&quot;</span>
+        <span class="k">pass</span> <span class="c">#User-defined actions</span>
+    </div>
+<div class="viewcode-block" id="PyCrash.onExceptionRaised"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.onExceptionRaised">[docs]</a>    <span class="k">def</span> <span class="nf">onExceptionRaised</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">time</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; User&#39;s defined actions: derived classes can override this</span>
+<span class="sd">            method to add custom actions. This method is called every  </span>
+<span class="sd">            time an uncaught exception is raised: &quot;time&quot; reports the number</span>
+<span class="sd">            of uncaught exceptions raised &quot;&quot;&quot;</span>
+        <span class="k">pass</span> <span class="c">#User-defined actions</span>
+</div>
+<div class="viewcode-block" id="PyCrash.onExit"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.onExit">[docs]</a>    <span class="k">def</span> <span class="nf">onExit</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; User&#39;s defined actions: derived classes can override this</span>
+<span class="sd">            method to add custom actions. This method is called at the exit </span>
+<span class="sd">            of application &quot;&quot;&quot;</span>
+        <span class="k">pass</span> <span class="c">#User-defined actions</span>
+    </div>
+    <span class="k">def</span> <span class="nf">printErrorMessage</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">exception</span><span class="p">,</span> <span class="n">message</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+        
+        <span class="c">#TODO: this function should print something of more useful</span>
+        <span class="k">print</span> <span class="n">exception</span><span class="p">,</span> <span class="n">message</span>
+
+
+<div class="viewcode-block" id="PyCrash.registerDispatcher"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.registerDispatcher">[docs]</a>    <span class="k">def</span> <span class="nf">registerDispatcher</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dispatcher</span><span class="p">):</span>
+        <span class="sd">&#39;&#39;&#39;</span>
+<span class="sd">        This method will register a dispatcher</span>
+<span class="sd">        &#39;&#39;&#39;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dispatchers</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">dispatcher</span><span class="p">)</span>
+    </div>
+<div class="viewcode-block" id="PyCrash.saveToFile"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.saveToFile">[docs]</a>    <span class="k">def</span> <span class="nf">saveToFile</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">filename</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Save the crash dump file in a given &#39;filename&#39; directory &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">__fileName</span> <span class="o">=</span> <span class="n">filename</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">__appCrashed</span><span class="p">:</span>
+            <span class="n">fd</span> <span class="o">=</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">)</span>
+            <span class="n">fd</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">getCrashDump</span><span class="p">())</span>
+            <span class="n">fd</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+</div>
+<div class="viewcode-block" id="PyCrash.toXML"><a class="viewcode-back" href="../pycrash.html#pycrash.PyCrash.toXML">[docs]</a>    <span class="k">def</span> <span class="nf">toXML</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot; Returns the XML rapresentation of the crash dump &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">__initialized</span><span class="p">,</span> <span class="s">&quot;PyCrash.__init__() not called&quot;</span>
+
+        <span class="n">crash</span> <span class="o">=</span> <span class="n">etree</span><span class="o">.</span><span class="n">Element</span><span class="p">(</span><span class="s">&quot;PyCrash&quot;</span><span class="p">,</span> 
+                    <span class="n">version</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">PYCRASH_VERSION</span><span class="p">),</span>
+                    <span class="n">appname</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_AppName</span><span class="p">),</span>
+                    <span class="n">appversion</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_Version</span><span class="p">),</span>
+                    <span class="n">started</span><span class="o">=</span><span class="n">time</span><span class="o">.</span><span class="n">ctime</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__time</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span>
+                    <span class="n">crashed</span><span class="o">=</span><span class="n">time</span><span class="o">.</span><span class="n">ctime</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__time</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+                    <span class="n">duration</span><span class="o">=</span><span class="n">time</span><span class="o">.</span><span class="n">ctime</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">__time</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">__time</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+                    <span class="n">osinfo</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">platform</span><span class="o">.</span><span class="n">platform</span><span class="p">()),</span>
+                    <span class="n">pyversion</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">version_info</span><span class="p">),</span>
+                    <span class="n">pyapiversion</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">sys</span><span class="o">.</span><span class="n">api_version</span><span class="p">))</span>
+
+        <span class="k">for</span> <span class="n">elem</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__customRecords</span><span class="p">:</span>
+            <span class="n">record_element</span> <span class="o">=</span> <span class="n">etree</span><span class="o">.</span><span class="n">Element</span><span class="p">(</span><span class="s">&quot;customrecord&quot;</span><span class="p">)</span>
+            <span class="n">record_element</span><span class="o">.</span><span class="n">text</span> <span class="o">=</span> <span class="n">elem</span>
+            <span class="n">crash</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">record_element</span><span class="p">)</span>
+   
+        <span class="k">for</span> <span class="n">tb</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">__tbList</span><span class="p">:</span>
+            <span class="n">crash</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">tb</span><span class="o">.</span><span class="n">toXML</span><span class="p">())</span>
+                             
+        <span class="k">return</span> <span class="n">etree</span><span class="o">.</span><span class="n">tostring</span><span class="p">(</span><span class="n">crash</span><span class="p">,</span> <span class="n">pretty_print</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span></div></div>
+</pre></div>
+
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar">
+        <div class="sphinxsidebarwrapper">
+<div id="searchbox" style="display: none">
+  <h3>Quick search</h3>
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    <p class="searchtip" style="font-size: 90%">
+    Enter search terms or a module, class or function name.
+    </p>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="../py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li><a href="../index.html">PyCrash PreAlpha1 documentation</a> &raquo;</li>
+          <li><a href="index.html" >Module code</a> &raquo;</li> 
+      </ul>
+    </div>
+    <div class="footer">
+        &copy; Copyright 2013, Mercion Wilathgamuwage / Carmine I.D. Noviello.
+      Created using <a href="http://sphinx.pocoo.org/">Sphinx</a> 1.1.3.
+    </div>
+  </body>
+</html>
