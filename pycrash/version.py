@@ -1,0 +1,1 @@
+PYCRASH_VERSION = "1.0pa1"
