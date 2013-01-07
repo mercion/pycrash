@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(  name="PyCrash",
-      	version="0.4-pre3",
+      	version="1.0PreAlpha1",
 		description="PyCrash: a Run-Time Exception Dumper for Python programs",
 		author="Carmine I.D. Noviello, Mercion Wilathgamuwage",
 		author_email="mwilathg@cisco.com",
