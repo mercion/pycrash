@@ -7,6 +7,6 @@ setup(  name="PyCrash",
 		description="PyCrash: a Run-Time Exception Dumper for Python programs",
 		author="Carmine I.D. Noviello, Mercion Wilathgamuwage",
 		author_email="s.mercion@gmail.com",
-        install_requires = ["lxml"],
+        install_requires = ["lxml", "mako"],
 		url="http://mercion.github.com/pycrash/docs/",
 		packages=['pycrash', 'pycrash.utils'])
